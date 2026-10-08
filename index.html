@@ -255,9 +255,11 @@ function verNov(id) {
   if (S.admin && n.estado !== 'cerrada') acciones.unshift(btn('estado', 'Cerrar (está resuelto)', n.estado === 'revisar' ? 'pri' : '', 'data-e="cerrada"'));
   if (S.admin && n.estado === 'cerrada') acciones.push(btn('estado', 'Reabrir', '', 'data-e="pendiente"'));
   const opts = ['', ...new Set([...D.equipo, n.asignado].filter(Boolean))];
+  const puedeEditar = S.admin || (yo() && norm(n.quien) === norm(yo()));
   openSheet(`<div class="row" style="justify-content:space-between;margin-bottom:8px"><span><span class="tag" style="background:${TIPOS[n.tipo] || TIPOS.Otro}">${esc(n.tipo)}</span>${n.urgente ? '<span class="tag urgtag">Urgente</span>' : ''}</span>
       <span class="est est-${n.estado}" style="float:none">${ESTADOS[n.estado]}</span></div>
-    <h3>${esc(n.titulo)}</h3>
+    <div class="row" style="flex-wrap:nowrap;align-items:flex-start;justify-content:space-between"><h3 style="flex:1">${esc(n.titulo)}</h3>
+      ${puedeEditar ? `<button class="btn sm" data-a="editarNov" data-id="${n.id}" style="flex:none;margin-top:2px">✏️ Editar</button>` : ''}</div>
     ${n.detalle ? `<div class="pre">${esc(n.detalle)}</div>` : ''}
     ${n.foto ? `<a href="https://drive.google.com/file/d/${encodeURIComponent(n.foto)}/view" target="_blank" rel="noopener"><img class="foto" src="https://drive.google.com/thumbnail?id=${encodeURIComponent(n.foto)}&sz=w1000" alt="Foto de la novedad" onerror="this.outerHTML='<span class=&quot;hint&quot;>Ver foto</span>'"></a>` : ''}
     <div style="margin-top:8px">
@@ -278,8 +280,11 @@ function verRider(id) {
   const r = D.riders.find(x => x.id === id); if (!r) { S.abierto = null; return toast('Ese rider ya no está'); }
   S.abierto = {t:'rid', id}; S.archivos = [];
   openSheet(`<h3>${esc(r.banda)}</h3>
-    <div class="kv"><span>Lugar</span><span>${esc(r.lugar)}</span></div>
-    ${r.fecha ? `<div class="kv"><span>Fecha</span><span>${fecha(r.fecha)}/${r.fecha.slice(0, 4)}</span></div>` : ''}
+    <label class="field"><span>Banda o solista</span><input type="text" id="ridBanda" value="${esc(r.banda)}"></label>
+    <div class="grid2">
+      <label class="field"><span>Lugar</span><input type="text" id="ridLugar" value="${esc(r.lugar)}"></label>
+      <label class="field"><span>Fecha</span><input type="date" id="ridFecha" value="${esc(r.fecha)}"></label>
+    </div>
     <div class="kv"><span>Cargó</span><span>${esc(r.quien)} · ${fechaHora(r.creado)}</span></div>
     <h2 style="font-size:19px">Archivos</h2>
     ${r.archivos.length ? r.archivos.map(f => `<a class="file" href="https://drive.google.com/file/d/${encodeURIComponent(f.id)}/view" target="_blank" rel="noopener"><span style="color:var(--tx)">${/pdf/i.test(f.mime) ? '📄' : /image/i.test(f.mime) ? '🖼️' : '📎'}</span><b>${esc(f.nombre)}</b><span>Abrir</span></a>`).join('') : '<p class="hint">Todavía no tiene archivos.</p>'}
@@ -296,23 +301,31 @@ function reabrir() {
 }
 
 /* ================= Formularios ================= */
-function formNov() {
-  S.abierto = null; S.nuevaFoto = null;
-  openSheet(`<h3>Nueva novedad</h3>
-    <div class="tipos">${Object.entries(TIPOS).map(([t, c], i) => `<label><input type="radio" name="tipo" value="${t}" ${i === 0 ? 'checked' : ''}><span style="--c:${c}">${t}</span></label>`).join('')}</div>
-    <label class="field"><span>Qué hay que hacer</span><input type="text" id="fTit" placeholder="Ej. Reparar ficha del cable DMX de 20 m" maxlength="200"></label>
-    <label class="field"><span>Detalle (opcional)</span><textarea id="fDet" placeholder="Todo lo que haga falta saber"></textarea></label>
-    <label class="field"><span>Dónde o para qué evento (opcional)</span><input type="text" id="fLug" placeholder="Depósito, salón, evento…"></label>
+function formNov(n) {
+  S.abierto = null; S.nuevaFoto = null; S.quitarFoto = false; S.editando = n ? n.id : null;
+  const v = n || {tipo:'Armar', titulo:'', detalle:'', lugar:'', para:'', asignado:'', urgente:false, foto:''};
+  const tipoSel = TIPOS[v.tipo] ? v.tipo : 'Otro';
+  const asigs = [...new Set([...D.equipo, v.asignado].filter(Boolean))];
+  openSheet(`<h3>${n ? 'Editar novedad' : 'Nueva novedad'}</h3>
+    <div class="tipos">${Object.keys(TIPOS).map(t => `<label><input type="radio" name="tipo" value="${t}" ${t === tipoSel ? 'checked' : ''}><span style="--c:${TIPOS[t]}">${t}</span></label>`).join('')}</div>
+    <label class="field"><span>Qué hay que hacer</span><input type="text" id="fTit" placeholder="Ej. Reparar ficha del cable DMX de 20 m" maxlength="200" value="${esc(v.titulo)}"></label>
+    <label class="field"><span>Detalle (opcional)</span><textarea id="fDet" placeholder="Todo lo que haga falta saber">${esc(v.detalle)}</textarea></label>
+    <label class="field"><span>Dónde o para qué evento (opcional)</span><input type="text" id="fLug" placeholder="Depósito, salón, evento…" value="${esc(v.lugar)}"></label>
     <div class="grid2">
-      <label class="field"><span>Para cuándo (opcional)</span><input type="date" id="fPara"></label>
-      <label class="field"><span>Asignar a (opcional)</span><select id="fAsig"><option value="">Sin asignar</option>${D.equipo.map(n => `<option>${esc(n)}</option>`).join('')}</select></label>
+      <label class="field"><span>Para cuándo (opcional)</span><input type="date" id="fPara" value="${esc(v.para)}"></label>
+      <label class="field"><span>Asignar a (opcional)</span><select id="fAsig"><option value="">Sin asignar</option>${asigs.map(x => `<option ${x === v.asignado ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
     </div>
-    <label class="chk"><input type="checkbox" id="fUrg">Es urgente</label>
-    <label class="btn sm" style="display:inline-block">📷 Agregar foto<input type="file" id="fileNov" accept="image/*" hidden></label>
-    <div class="prev" id="prevNov"></div>
-    <button class="btn pri" style="width:100%;margin-top:6px" data-a="enviarNov">Cargar novedad</button>`);
+    <label class="chk"><input type="checkbox" id="fUrg" ${v.urgente ? 'checked' : ''}>Es urgente</label>
+    <label class="btn sm" style="display:inline-block">📷 ${v.foto ? 'Cambiar foto' : 'Agregar foto'}<input type="file" id="fileNov" accept="image/*" hidden></label>
+    <div class="prev" id="prevNov">${v.foto ? fotoActual(v.foto) : ''}</div>
+    ${n ? `<div class="row" style="margin-top:6px;flex-wrap:nowrap"><button class="btn" data-a="cancelarEdicion" data-id="${n.id}">Cancelar</button>
+      <button class="btn pri" style="flex:1" data-a="guardarNov" data-id="${n.id}">Guardar cambios</button></div>`
+      : '<button class="btn pri" style="width:100%;margin-top:6px" data-a="enviarNov">Cargar novedad</button>'}`);
   colorTipos();
 }
+const fotoActual = id => `<img src="https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w300" alt="Foto actual" onerror="this.remove()"><button class="btn sm" data-a="sinFoto">Quitar foto</button>`;
+const datosForm = () => ({tipo:(document.querySelector('.tipos input:checked') || {}).value || 'Otro', titulo:$('#fTit').value.trim(),
+  detalle:$('#fDet').value.trim(), lugar:$('#fLug').value.trim(), para:$('#fPara').value, asignado:$('#fAsig').value, urgente:$('#fUrg').checked});
 function colorTipos() { document.querySelectorAll('.tipos input').forEach(i => { const s = i.nextElementSibling; s.style.background = i.checked ? s.style.getPropertyValue('--c') : ''; }); }
 function formRider() {
   S.abierto = null; S.archivos = [];
@@ -386,7 +399,17 @@ const A = {
   verRider(b) { verRider(b.dataset.id); },
   nuevaNov() { pedirQuien(formNov); },
   nuevoRider() { pedirQuien(formRider); },
-  sinFoto() { S.nuevaFoto = null; $('#prevNov').innerHTML = ''; },
+  sinFoto() { if (S.editando && !S.nuevaFoto) S.quitarFoto = true; S.nuevaFoto = null; $('#prevNov').innerHTML = S.editando ? '<span>Se va a quitar la foto al guardar</span>' : ''; },
+  editarNov(b) { const n = D.novedades.find(x => x.id === b.dataset.id); if (n) pedirQuien(() => formNov(n)); },
+  cancelarEdicion(b) { S.editando = null; verNov(b.dataset.id); },
+  async guardarNov(b) {
+    const f = datosForm(); if (!f.titulo) return toast('Escribí qué hay que hacer');
+    b.disabled = true;
+    const r = await accion({a:'editar', id:b.dataset.id, ...f, quitarFoto:S.quitarFoto && !S.nuevaFoto,
+      foto:S.nuevaFoto ? {nombre:S.nuevaFoto.nombre, mime:S.nuevaFoto.mime, b64:S.nuevaFoto.b64} : null}, S.nuevaFoto ? 'Subiendo la foto…' : 'Guardando…');
+    b.disabled = false;
+    if (r) { S.editando = null; actualizarNov(r.novedad); verNov(r.novedad.id); toast(r.sinCambios ? 'No había cambios' : 'Cambios guardados'); }
+  },
   sinArchivos() { S.archivos = []; $('#prevRid').innerHTML = ''; },
   setQuien(b) {
     const q = (b.dataset.q || ($('#quienOtro') && $('#quienOtro').value) || '').trim(); if (!q) return toast('Escribí tu nombre');
@@ -395,9 +418,7 @@ const A = {
   async enviarNov(b) {
     const tit = $('#fTit').value.trim(); if (!tit) return toast('Escribí qué hay que hacer');
     b.disabled = true;
-    const r = await accion({a:'nueva', tipo:(document.querySelector('.tipos input:checked') || {}).value || 'Otro', titulo:tit,
-      detalle:$('#fDet').value.trim(), lugar:$('#fLug').value.trim(), para:$('#fPara').value, asignado:$('#fAsig').value,
-      urgente:$('#fUrg').checked, foto:S.nuevaFoto ? {nombre:S.nuevaFoto.nombre, mime:S.nuevaFoto.mime, b64:S.nuevaFoto.b64} : null},
+    const r = await accion({a:'nueva', ...datosForm(), foto:S.nuevaFoto ? {nombre:S.nuevaFoto.nombre, mime:S.nuevaFoto.mime, b64:S.nuevaFoto.b64} : null},
       S.nuevaFoto ? 'Subiendo la foto…' : 'Cargando…');
     b.disabled = false;
     if (r) { closeSheet(); S.tab = 'nov'; S.filtro = 'abiertas'; toast('Novedad cargada'); cargar(true); }
@@ -430,7 +451,9 @@ const A = {
   },
   guardarRider(b) {
     pedirQuien(async () => {
-      const r = await accion({a:'riderEditar', id:b.dataset.id, notas:$('#ridNotas').value,
+      const banda = $('#ridBanda').value.trim(), lugar = $('#ridLugar').value.trim();
+      if (!banda || !lugar) return toast('La banda y el lugar no pueden quedar vacíos');
+      const r = await accion({a:'riderEditar', id:b.dataset.id, banda, lugar, fecha:$('#ridFecha').value, notas:$('#ridNotas').value,
         archivos:S.archivos.map(({nombre, mime, b64}) => ({nombre, mime, b64}))}, S.archivos.length ? 'Subiendo archivos…' : 'Guardando…');
       if (r) { const i = D.riders.findIndex(x => x.id === r.rider.id); D.riders[i] = r.rider; S.archivos = []; ls.set(LSK, JSON.stringify(D)); render(); verRider(r.rider.id); toast('Guardado'); }
     });
